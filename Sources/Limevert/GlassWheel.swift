@@ -74,6 +74,11 @@ struct AnnularSector: Shape {
     }
 }
 
+/// Hosting view that never takes pointer or drag input; WheelView above it handles both.
+final class PassthroughHostingView<Content: View>: NSHostingView<Content> {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+}
+
 @available(macOS 26, *)
 struct GlassWheelView: View {
     @ObservedObject var model: WheelModel
@@ -81,7 +86,8 @@ struct GlassWheelView: View {
 
     private var lime: Color { Color(nsColor: Brand.lime) }
     private func base(_ tint: Color?) -> Glass {
-        (style == .clear ? Glass.clear : Glass.regular).tint(tint).interactive()
+        // Not interactive: interactive glass claims pointer input and swallows the drag meant for WheelView.
+        (style == .clear ? Glass.clear : Glass.regular).tint(tint)
     }
 
     var body: some View {
@@ -95,6 +101,7 @@ struct GlassWheelView: View {
                 }
                 .frame(width: d, height: d)
             }
+            .allowsHitTesting(false)
             ZStack {
                 ForEach(model.petals.indices, id: \.self) { i in petalLabel(i, size: d) }
                 hubText
