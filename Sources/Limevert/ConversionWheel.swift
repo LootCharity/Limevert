@@ -1,5 +1,6 @@
 import AppKit
 import QuartzCore
+import SwiftUI
 
 enum Brand {
     static let lime = NSColor(srgbRed: 0.62, green: 0.84, blue: 0.24, alpha: 1)
@@ -20,18 +21,31 @@ final class ConversionWheelController {
         let view = WheelView(urls: urls, actions: actions)
         let size = view.diameter
         let frame = NSRect(x: point.x - size / 2, y: point.y - size / 2, width: size, height: size)
+        var content: NSView = view
+        if #available(macOS 26, *) {
+            // System Liquid Glass renders below; the AppKit view stays on top as the invisible drop target.
+            view.drawsWheel = false
+            let glass = NSHostingView(rootView: GlassWheelView(model: view.model, style: Settings.shared.wheelGlass))
+            let stack = NSView(frame: NSRect(x: 0, y: 0, width: size, height: size))
+            for v in [glass, view] as [NSView] {
+                v.frame = stack.bounds
+                v.autoresizingMask = [.width, .height]
+                stack.addSubview(v)
+            }
+            content = stack
+        }
         let panel = NSPanel(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
         panel.level = .popUpMenu
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
-        panel.contentView = view
+        panel.contentView = content
         view.onFinish = { [weak self] in self?.close() }
         panel.alphaValue = 0
         panel.orderFrontRegardless()
         view.wantsLayer = true
-        if let layer = view.layer {
+        if view.drawsWheel, let layer = view.layer {
             let grow = CABasicAnimation(keyPath: "transform.scale")
             grow.fromValue = 0.86
             grow.toValue = 1
@@ -74,8 +88,13 @@ final class WheelView: NSView {
 
     let urls: [URL]
     private var petals: [Petal] = []
-    private var hovered: Int?
+    private var hovered: Int? {
+        didSet { model.hovered = hovered }
+    }
     var onFinish: () -> Void = {}
+    /// False when the SwiftUI glass wheel renders the visuals underneath.
+    var drawsWheel = true
+    private(set) var model: WheelModel!
 
     private let hub: CGFloat = 58
     private let ringWidth: CGFloat = 78
@@ -103,6 +122,10 @@ final class WheelView: NSView {
             }
         }
         setFrameSize(NSSize(width: diameter, height: diameter))
+        model = WheelModel(urls: urls, petals: petals.map { p in
+            let (r0, r1) = radii(p.ring)
+            return PetalGeometry(action: p.action, inner: r0, outer: r1, start: p.start, end: p.end)
+        }, hub: hub, diameter: diameter)
         registerForDraggedTypes([.fileURL])
     }
 
@@ -144,6 +167,7 @@ final class WheelView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
+        guard drawsWheel else { return }
         let outer = radii(rings - 1).1 + 6
         let disk = NSBezierPath(ovalIn: NSRect(x: center.x - outer, y: center.y - outer, width: 2 * outer, height: 2 * outer))
         NSGraphicsContext.saveGraphicsState()

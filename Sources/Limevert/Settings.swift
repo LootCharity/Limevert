@@ -43,6 +43,7 @@ final class Settings: ObservableObject {
     /// 0 = 1080p HEVC, 1 = 720p, 2 = 540p.
     @Published var videoCompression: Int { didSet { d.set(videoCompression, forKey: "videoCompression") } }
     @Published var hasSeenWelcome: Bool { didSet { d.set(hasSeenWelcome, forKey: "hasSeenWelcome") } }
+    @Published var wheelGlass: WheelGlass { didSet { d.set(wheelGlass.rawValue, forKey: "wheelGlass") } }
 
     static let maxEdgeChoices: [Int?] = [nil, 3840, 2560, 1920, 1280]
     var compressMaxEdge: Int? { Self.maxEdgeChoices[min(compressMaxEdgeIndex, Self.maxEdgeChoices.count - 1)] }
@@ -63,6 +64,7 @@ final class Settings: ObservableObject {
         keepFormatWhenCompressing = d.bool(forKey: "keepFormat")
         videoCompression = d.integer(forKey: "videoCompression")
         hasSeenWelcome = d.bool(forKey: "hasSeenWelcome")
+        wheelGlass = WheelGlass(rawValue: d.string(forKey: "wheelGlass") ?? "") ?? .regular
     }
 
     var launchAtLogin: Bool {
@@ -90,6 +92,12 @@ struct SettingsView: View {
                     }
                     Text("Drag files anywhere, then tap the shortcut to open the conversion wheel.")
                         .font(.caption).foregroundStyle(.secondary)
+                    if #available(macOS 26, *) {
+                        Picker("Wheel glass", selection: $settings.wheelGlass) {
+                            ForEach(WheelGlass.allCases) { Text($0.label).tag($0) }
+                        }
+                        .pickerStyle(.segmented)
+                    }
                 }
                 Section("General") {
                     Toggle("Launch Limevert at login", isOn: Binding(
