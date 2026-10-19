@@ -115,7 +115,7 @@ struct FloatView: View {
                 .padding([.horizontal, .bottom], 12)
             } else {
                 ScrollView {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 76), spacing: 8)], spacing: 10) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 84), spacing: 8)], spacing: 10) {
                         ForEach(model.items, id: \.self) { url in
                             FloatTile(url: url, selected: model.selection.contains(url))
                                 .onTapGesture(count: 2) { NSWorkspace.shared.open(url) }
@@ -173,7 +173,7 @@ struct FloatTile: View {
                 .truncationMode(.middle)
         }
         .padding(6)
-        .frame(width: 76)
+        .frame(width: 84)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(selected ? Color(nsColor: Brand.lime).opacity(0.3) : thumb.hovering ? Color.secondary.opacity(0.12) : .clear)
