@@ -20,7 +20,9 @@ final class ConversionWheelController {
         guard !actions.isEmpty else { return }
         let view = WheelView(urls: urls, actions: actions)
         let size = view.diameter
-        let frame = NSRect(x: point.x - size / 2, y: point.y - size / 2, width: size, height: size)
+        let screen = NSScreen.screens.first { NSMouseInRect(point, $0.frame, false) } ?? NSScreen.main
+        let frame = WheelPlacement.frame(around: point, panelSize: size, visibleRadius: view.visibleRadius,
+                                         in: screen?.visibleFrame ?? NSRect(origin: .zero, size: CGSize(width: size, height: size)))
         var content: NSView = view
         if #available(macOS 26, *), Theme.glassEnabled {
             // System Liquid Glass renders below; the AppKit view stays on top as the invisible drop target.
@@ -78,6 +80,23 @@ final class ConversionWheelController {
     }
 }
 
+/// Where the wheel's panel goes: centered on the pointer when it fits, otherwise slid inward
+/// just far enough that the whole wheel is inside `area` (a screen's visible frame, clear of the menu bar and Dock).
+enum WheelPlacement {
+    static let margin: CGFloat = 8
+
+    static func frame(around point: NSPoint, panelSize: CGFloat, visibleRadius: CGFloat, in area: NSRect) -> NSRect {
+        func axis(_ p: CGFloat, _ lo: CGFloat, _ hi: CGFloat) -> CGFloat {
+            let minC = lo + visibleRadius + margin, maxC = hi - visibleRadius - margin
+            // Screen smaller than the wheel on this axis: center it.
+            guard minC <= maxC else { return (lo + hi) / 2 }
+            return min(max(p, minC), maxC)
+        }
+        let c = NSPoint(x: axis(point.x, area.minX, area.maxX), y: axis(point.y, area.minY, area.maxY))
+        return NSRect(x: c.x - panelSize / 2, y: c.y - panelSize / 2, width: panelSize, height: panelSize)
+    }
+}
+
 final class WheelView: NSView {
     struct Petal {
         let action: WheelAction
@@ -102,6 +121,8 @@ final class WheelView: NSView {
     private let edgeSlack: CGFloat = 20
     private let rings: Int
     var diameter: CGFloat { 2 * (hub + CGFloat(rings) * (ringWidth + gap)) + 48 }
+    /// Radius of everything that must stay on screen: the outer ring plus its drop-target slack and pop-out.
+    var visibleRadius: CGFloat { radii(rings - 1).1 + edgeSlack }
 
     init(urls: [URL], actions: [WheelAction]) {
         self.urls = urls

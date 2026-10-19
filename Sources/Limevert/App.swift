@@ -117,7 +117,8 @@ final class StatusDropView: NSView {
         guard !urls.isEmpty, let window else { return [] }
         let iconFrame = window.convertToScreen(convert(bounds, to: nil))
         MainActor.assumeIsolated {
-            ConversionWheelController.shared.show(for: urls, at: NSPoint(x: iconFrame.midX, y: iconFrame.minY - 230))
+            // Anchor just below the icon; placement slides the wheel down until it clears the menu bar.
+            ConversionWheelController.shared.show(for: urls, at: NSPoint(x: iconFrame.midX, y: iconFrame.minY - 8))
         }
         return .copy
     }
