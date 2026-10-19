@@ -4,3 +4,4 @@
 *.icns
 *.iconset/
 .DS_Store
+*.dmg
