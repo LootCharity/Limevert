@@ -1,4 +1,5 @@
 import AppKit
+import QuartzCore
 
 enum Brand {
     static let lime = NSColor(srgbRed: 0.62, green: 0.84, blue: 0.24, alpha: 1)
@@ -29,6 +30,17 @@ final class ConversionWheelController {
         view.onFinish = { [weak self] in self?.close() }
         panel.alphaValue = 0
         panel.orderFrontRegardless()
+        view.wantsLayer = true
+        if let layer = view.layer {
+            let grow = CABasicAnimation(keyPath: "transform.scale")
+            grow.fromValue = 0.86
+            grow.toValue = 1
+            grow.duration = 0.18
+            grow.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 1.3, 0.4, 1)
+            layer.anchorPoint = CGPoint(x: 0.5, y: 0.5)
+            layer.position = CGPoint(x: view.bounds.midX, y: view.bounds.midY)
+            layer.add(grow, forKey: "grow")
+        }
         NSAnimationContext.runAnimationGroup { $0.duration = 0.12; panel.animator().alphaValue = 1 }
         self.panel = panel
         Feedback.pop()
@@ -69,7 +81,7 @@ final class WheelView: NSView {
     private let ringWidth: CGFloat = 78
     private let gap: CGFloat = 4
     private let rings: Int
-    var diameter: CGFloat { 2 * (hub + CGFloat(rings) * (ringWidth + gap)) + 24 }
+    var diameter: CGFloat { 2 * (hub + CGFloat(rings) * (ringWidth + gap)) + 48 }
 
     init(urls: [URL], actions: [WheelAction]) {
         self.urls = urls
@@ -103,8 +115,10 @@ final class WheelView: NSView {
         return (inner, inner + ringWidth)
     }
 
-    private func path(for p: Petal) -> NSBezierPath {
-        let (r0, r1) = radii(p.ring)
+    private func path(for p: Petal, grow: CGFloat = 0) -> NSBezierPath {
+        var (r0, r1) = radii(p.ring)
+        r0 -= grow / 2
+        r1 += grow
         let inset: CGFloat = 0.012
         let path = NSBezierPath()
         let a0 = (p.start + inset) * 180 / .pi, a1 = (p.end - inset) * 180 / .pi
@@ -132,23 +146,46 @@ final class WheelView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         let outer = radii(rings - 1).1 + 6
         let disk = NSBezierPath(ovalIn: NSRect(x: center.x - outer, y: center.y - outer, width: 2 * outer, height: 2 * outer))
-        NSColor(white: 0.08, alpha: 0.82).setFill()
+        NSGraphicsContext.saveGraphicsState()
+        let shadow = NSShadow()
+        shadow.shadowColor = NSColor.black.withAlphaComponent(0.45)
+        shadow.shadowBlurRadius = 16
+        shadow.shadowOffset = NSSize(width: 0, height: -5)
+        shadow.set()
+        NSColor(white: 0.07, alpha: 0.88).setFill()
         disk.fill()
-        NSColor(white: 1, alpha: 0.12).setStroke()
+        NSGraphicsContext.restoreGraphicsState()
+        NSColor(white: 1, alpha: 0.14).setStroke()
         disk.lineWidth = 1
         disk.stroke()
 
-        for (i, p) in petals.enumerated() {
+        // Draw the hovered petal last so its pop-out sits above its neighbours.
+        let order = petals.indices.filter { $0 != hovered } + (hovered.map { [$0] } ?? [])
+        for i in order {
+            let p = petals[i]
             let isHover = i == hovered
             let base: NSColor
-            if case .convert = p.action { base = Brand.lime.withAlphaComponent(0.22) } else { base = NSColor(white: 1, alpha: 0.10) }
-            (isHover ? Brand.lime : base).setFill()
-            path(for: p).fill()
+            if case .convert = p.action { base = Brand.lime.withAlphaComponent(0.20) } else { base = NSColor(white: 1, alpha: 0.08) }
+            let shape = path(for: p, grow: isHover ? 6 : 0)
+            if isHover {
+                NSGradient(starting: Brand.lime, ending: Brand.lime.blended(withFraction: 0.25, of: Brand.limeDeep) ?? Brand.lime)?
+                    .draw(in: shape, relativeCenterPosition: .zero)
+            } else {
+                base.setFill()
+                shape.fill()
+            }
+            (isHover ? NSColor.white.withAlphaComponent(0.5) : NSColor(white: 1, alpha: 0.07)).setStroke()
+            shape.lineWidth = 1
+            shape.stroke()
             drawLabel(for: p, highlighted: isHover)
         }
 
         let hubPath = NSBezierPath(ovalIn: NSRect(x: center.x - hub, y: center.y - hub, width: 2 * hub, height: 2 * hub))
         NSGradient(starting: Brand.lime, ending: Brand.limeDeep)?.draw(in: hubPath, angle: -90)
+        NSColor.white.withAlphaComponent(0.35).setStroke()
+        let rim = NSBezierPath(ovalIn: NSRect(x: center.x - hub + 1.5, y: center.y - hub + 1.5, width: 2 * hub - 3, height: 2 * hub - 3))
+        rim.lineWidth = 1
+        rim.stroke()
         let title: String, subtitle: String
         if let h = hovered {
             title = petals[h].action.label
@@ -167,7 +204,7 @@ final class WheelView: NSView {
         let (r0, r1) = radii(p.ring)
         let mid = (p.start + p.end) / 2, r = (r0 + r1) / 2
         let pt = CGPoint(x: center.x + cos(mid) * r, y: center.y + sin(mid) * r)
-        let color: NSColor = highlighted ? .black : .white
+        let color: NSColor = highlighted ? NSColor(white: 0.05, alpha: 1) : NSColor(white: 1, alpha: 0.92)
         let maxWidth = min(ringWidth - 8, (p.end - p.start) * r - 6)
         if let symbol = p.action.symbol,
            let img = NSImage(systemSymbolName: symbol, accessibilityDescription: p.action.label)?

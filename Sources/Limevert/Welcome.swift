@@ -89,23 +89,26 @@ struct WelcomeView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .transition(.opacity)
             .padding(.horizontal, 40)
             .padding(.top, 36)
 
             HStack {
-                if state.page > 0 { Button("Back") { state.page -= 1 } }
+                if state.page > 0 { Button("Back") { withAnimation { state.page -= 1 } }.buttonStyle(.bordered) }
                 Spacer()
                 HStack(spacing: 6) {
                     ForEach(0..<3) { i in
-                        Circle().fill(i == state.page ? Color(nsColor: Brand.lime) : Color.secondary.opacity(0.3))
-                            .frame(width: 7, height: 7)
+                        Capsule().fill(i == state.page ? Color(nsColor: Brand.lime) : Color.secondary.opacity(0.3))
+                            .frame(width: i == state.page ? 18 : 7, height: 7)
                     }
                 }
                 Spacer()
                 Button(state.page == 2 ? "Get Started" : "Continue") {
-                    if state.page == 2 { settings.hasSeenWelcome = true; close() } else { state.page += 1 }
+                    if state.page == 2 { settings.hasSeenWelcome = true; close() } else { withAnimation { state.page += 1 } }
                 }
                 .keyboardShortcut(.defaultAction)
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
                 .tint(Color(nsColor: Brand.limeDeep))
             }
             .padding(20)
@@ -116,6 +119,7 @@ struct WelcomeView: View {
     private var intro: some View {
         VStack(spacing: 16) {
             LimeMark().frame(width: 96, height: 96)
+                .shadow(color: Color(nsColor: Brand.limeDeep).opacity(0.35), radius: 14, y: 6)
             Text("Welcome to Limevert").font(.largeTitle.bold())
             Text("Convert, compress and carry files without opening another app. Limevert lives in your menu bar and saves results beside the originals.")
                 .multilineTextAlignment(.center).foregroundStyle(.secondary)
@@ -172,6 +176,8 @@ struct WelcomeView: View {
     private func feature(_ symbol: String, _ title: String) -> some View {
         VStack(spacing: 6) {
             Image(systemName: symbol).font(.title2).foregroundStyle(Color(nsColor: Brand.limeDeep))
+                .frame(width: 48, height: 40)
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color(nsColor: Brand.lime).opacity(0.15)))
             Text(title).font(.caption)
         }
     }

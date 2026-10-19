@@ -89,9 +89,16 @@ struct FloatView: View {
                     Image(systemName: "tray.and.arrow.down").font(.system(size: 30, weight: .light))
                     Text("Drop files here").font(.callout)
                     Text("They stay here until you drag them out.").font(.caption).foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
                 }
-                .foregroundStyle(.secondary)
+                .foregroundStyle(model.dropTargeted ? Color(nsColor: Brand.limeDeep) : .secondary)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6, 5]))
+                        .foregroundStyle(model.dropTargeted ? Color(nsColor: Brand.lime) : Color.secondary.opacity(0.35))
+                )
+                .padding([.horizontal, .bottom], 12)
             } else {
                 ScrollView {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 76), spacing: 8)], spacing: 10) {
@@ -152,7 +159,11 @@ struct FloatTile: View {
         }
         .padding(6)
         .frame(width: 76)
-        .background(RoundedRectangle(cornerRadius: 8).fill(selected ? Color(nsColor: Brand.lime).opacity(0.3) : .clear))
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(selected ? Color(nsColor: Brand.lime).opacity(0.3) : thumb.hovering ? Color.secondary.opacity(0.12) : .clear)
+        )
+        .onHover { thumb.hovering = $0 }
         .task {
             let req = QLThumbnailGenerator.Request(fileAt: url, size: CGSize(width: 112, height: 112),
                                                    scale: 2, representationTypes: .thumbnail)
@@ -165,6 +176,7 @@ struct FloatTile: View {
 
 final class ThumbnailLoader: ObservableObject {
     @Published var image: NSImage?
+    @Published var hovering = false
 }
 
 /// AppKit drag source that carries several files at once (SwiftUI's onDrag carries one).
