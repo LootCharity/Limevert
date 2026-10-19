@@ -99,6 +99,7 @@ final class WheelView: NSView {
     private let hub: CGFloat = 58
     private let ringWidth: CGFloat = 78
     private let gap: CGFloat = 4
+    private let edgeSlack: CGFloat = 20
     private let rings: Int
     var diameter: CGFloat { 2 * (hub + CGFloat(rings) * (ringWidth + gap)) + 48 }
 
@@ -156,7 +157,9 @@ final class WheelView: NSView {
         let r = hypot(dx, dy)
         for (i, p) in petals.enumerated() {
             let (r0, r1) = radii(p.ring)
-            guard r >= r0 - gap, r <= r1 + gap else { continue }
+            // The outermost ring reaches to the panel edge so a slightly wide drop still counts.
+            let reach = p.ring == rings - 1 ? edgeSlack : gap
+            guard r >= r0 - gap, r <= r1 + reach else { continue }
             // Normalize the angle into [start, start + 2π).
             var angle = atan2(dy, dx)
             while angle < p.start { angle += 2 * .pi }
@@ -167,7 +170,14 @@ final class WheelView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        guard drawsWheel else { return }
+        guard drawsWheel else {
+            // The window server lets drags fall through fully transparent pixels, and system glass
+            // isn't part of our window's pixels. A barely-visible fill keeps the whole wheel a drop target.
+            let r = radii(rings - 1).1 + edgeSlack
+            NSColor(white: 0, alpha: 0.012).setFill()
+            NSBezierPath(ovalIn: NSRect(x: center.x - r, y: center.y - r, width: 2 * r, height: 2 * r)).fill()
+            return
+        }
         let outer = radii(rings - 1).1 + 6
         let disk = NSBezierPath(ovalIn: NSRect(x: center.x - outer, y: center.y - outer, width: 2 * outer, height: 2 * outer))
         NSGraphicsContext.saveGraphicsState()
