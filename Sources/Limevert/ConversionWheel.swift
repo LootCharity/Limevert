@@ -1,0 +1,246 @@
+import AppKit
+
+enum Brand {
+    static let lime = NSColor(srgbRed: 0.62, green: 0.84, blue: 0.24, alpha: 1)
+    static let limeDeep = NSColor(srgbRed: 0.33, green: 0.62, blue: 0.10, alpha: 1)
+}
+
+/// Radial wheel shown under the cursor during a file drag. Each petal is a drop target.
+@MainActor
+final class ConversionWheelController {
+    static let shared = ConversionWheelController()
+    private var panel: NSPanel?
+    private var watchdog: Timer?
+
+    func show(for urls: [URL], at point: NSPoint) {
+        close()
+        let actions = ActionCatalog.actions(for: urls)
+        guard !actions.isEmpty else { return }
+        let view = WheelView(urls: urls, actions: actions)
+        let size = view.diameter
+        let frame = NSRect(x: point.x - size / 2, y: point.y - size / 2, width: size, height: size)
+        let panel = NSPanel(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = false
+        panel.level = .popUpMenu
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+        panel.contentView = view
+        view.onFinish = { [weak self] in self?.close() }
+        panel.alphaValue = 0
+        panel.orderFrontRegardless()
+        NSAnimationContext.runAnimationGroup { $0.duration = 0.12; panel.animator().alphaValue = 1 }
+        self.panel = panel
+        Feedback.pop()
+
+        // Dismiss once the drag ends anywhere else.
+        watchdog = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard NSEvent.pressedMouseButtons & 1 == 0 else { return }
+                self?.watchdog?.invalidate()
+                // Leave a moment for performDragOperation to run first.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { self?.close() }
+            }
+        }
+    }
+
+    func close() {
+        watchdog?.invalidate()
+        watchdog = nil
+        panel?.orderOut(nil)
+        panel = nil
+    }
+}
+
+final class WheelView: NSView {
+    struct Petal {
+        let action: WheelAction
+        let ring: Int
+        let start: CGFloat   // radians
+        let end: CGFloat
+    }
+
+    let urls: [URL]
+    private var petals: [Petal] = []
+    private var hovered: Int?
+    var onFinish: () -> Void = {}
+
+    private let hub: CGFloat = 58
+    private let ringWidth: CGFloat = 78
+    private let gap: CGFloat = 4
+    private let rings: Int
+    var diameter: CGFloat { 2 * (hub + CGFloat(rings) * (ringWidth + gap)) + 24 }
+
+    init(urls: [URL], actions: [WheelAction]) {
+        self.urls = urls
+        let conversions = actions.filter { if case .convert = $0 { true } else { false } }
+        let tools = actions.filter { if case .tool = $0 { true } else { false } }
+        // Conversions on the inner ring, tools on the outer one; a single long list is split in two.
+        let layout: [[WheelAction]]
+        if !conversions.isEmpty && !tools.isEmpty { layout = [conversions, tools] }
+        else if actions.count > 12 { layout = [Array(actions.prefix(8)), Array(actions.dropFirst(8))] }
+        else { layout = [actions] }
+        rings = layout.count
+        super.init(frame: .zero)
+        for (ring, items) in layout.enumerated() {
+            let step = 2 * CGFloat.pi / CGFloat(items.count)
+            for (i, action) in items.enumerated() {
+                // Start at 12 o'clock and go clockwise.
+                let end = CGFloat.pi / 2 - CGFloat(i) * step
+                petals.append(Petal(action: action, ring: ring, start: end - step, end: end))
+            }
+        }
+        setFrameSize(NSSize(width: diameter, height: diameter))
+        registerForDraggedTypes([.fileURL])
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    private var center: CGPoint { CGPoint(x: bounds.midX, y: bounds.midY) }
+
+    private func radii(_ ring: Int) -> (CGFloat, CGFloat) {
+        let inner = hub + gap + CGFloat(ring) * (ringWidth + gap)
+        return (inner, inner + ringWidth)
+    }
+
+    private func path(for p: Petal) -> NSBezierPath {
+        let (r0, r1) = radii(p.ring)
+        let inset: CGFloat = 0.012
+        let path = NSBezierPath()
+        let a0 = (p.start + inset) * 180 / .pi, a1 = (p.end - inset) * 180 / .pi
+        path.appendArc(withCenter: center, radius: r1, startAngle: a0, endAngle: a1, clockwise: false)
+        path.appendArc(withCenter: center, radius: r0, startAngle: a1, endAngle: a0, clockwise: true)
+        path.close()
+        return path
+    }
+
+    private func petalIndex(at point: NSPoint) -> Int? {
+        let dx = point.x - center.x, dy = point.y - center.y
+        let r = hypot(dx, dy)
+        for (i, p) in petals.enumerated() {
+            let (r0, r1) = radii(p.ring)
+            guard r >= r0 - gap, r <= r1 + gap else { continue }
+            // Normalize the angle into [start, start + 2π).
+            var angle = atan2(dy, dx)
+            while angle < p.start { angle += 2 * .pi }
+            while angle >= p.start + 2 * .pi { angle -= 2 * .pi }
+            if angle <= p.end { return i }
+        }
+        return nil
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let outer = radii(rings - 1).1 + 6
+        let disk = NSBezierPath(ovalIn: NSRect(x: center.x - outer, y: center.y - outer, width: 2 * outer, height: 2 * outer))
+        NSColor(white: 0.08, alpha: 0.82).setFill()
+        disk.fill()
+        NSColor(white: 1, alpha: 0.12).setStroke()
+        disk.lineWidth = 1
+        disk.stroke()
+
+        for (i, p) in petals.enumerated() {
+            let isHover = i == hovered
+            let base: NSColor
+            if case .convert = p.action { base = Brand.lime.withAlphaComponent(0.22) } else { base = NSColor(white: 1, alpha: 0.10) }
+            (isHover ? Brand.lime : base).setFill()
+            path(for: p).fill()
+            drawLabel(for: p, highlighted: isHover)
+        }
+
+        let hubPath = NSBezierPath(ovalIn: NSRect(x: center.x - hub, y: center.y - hub, width: 2 * hub, height: 2 * hub))
+        NSGradient(starting: Brand.lime, ending: Brand.limeDeep)?.draw(in: hubPath, angle: -90)
+        let title: String, subtitle: String
+        if let h = hovered {
+            title = petals[h].action.label
+            subtitle = urls.count == 1 ? "Drop to apply" : "Drop \(urls.count) files"
+        } else {
+            title = urls.count == 1 ? urls[0].pathExtension.uppercased().nilIfEmpty ?? "Item" : "\(urls.count) items"
+            subtitle = "Drop on a petal"
+        }
+        drawCentered(title, font: .systemFont(ofSize: 15, weight: .bold), color: .black.withAlphaComponent(0.85),
+                     at: CGPoint(x: center.x, y: center.y + 8), maxWidth: 2 * hub - 14)
+        drawCentered(subtitle, font: .systemFont(ofSize: 10, weight: .medium), color: .black.withAlphaComponent(0.6),
+                     at: CGPoint(x: center.x, y: center.y - 12), maxWidth: 2 * hub - 14)
+    }
+
+    private func drawLabel(for p: Petal, highlighted: Bool) {
+        let (r0, r1) = radii(p.ring)
+        let mid = (p.start + p.end) / 2, r = (r0 + r1) / 2
+        let pt = CGPoint(x: center.x + cos(mid) * r, y: center.y + sin(mid) * r)
+        let color: NSColor = highlighted ? .black : .white
+        let maxWidth = min(ringWidth - 8, (p.end - p.start) * r - 6)
+        if let symbol = p.action.symbol,
+           let img = NSImage(systemSymbolName: symbol, accessibilityDescription: p.action.label)?
+            .withSymbolConfiguration(.init(pointSize: 15, weight: .semibold)) {
+            let tinted = img.tinted(color)
+            let s = tinted.size
+            tinted.draw(in: NSRect(x: pt.x - s.width / 2, y: pt.y + 1, width: s.width, height: s.height))
+            drawCentered(p.action.label, font: .systemFont(ofSize: 9, weight: .semibold), color: color,
+                         at: CGPoint(x: pt.x, y: pt.y - 9), maxWidth: maxWidth)
+        } else {
+            drawCentered(p.action.label, font: .systemFont(ofSize: 13, weight: .bold), color: color,
+                         at: pt, maxWidth: maxWidth)
+        }
+    }
+
+    private func drawCentered(_ text: String, font: NSFont, color: NSColor, at pt: CGPoint, maxWidth: CGFloat) {
+        var font = font
+        var attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color]
+        var size = (text as NSString).size(withAttributes: attrs)
+        while size.width > maxWidth && font.pointSize > 7 {
+            font = NSFont.systemFont(ofSize: font.pointSize - 0.5, weight: .semibold)
+            attrs[.font] = font
+            size = (text as NSString).size(withAttributes: attrs)
+        }
+        (text as NSString).draw(at: CGPoint(x: pt.x - size.width / 2, y: pt.y - size.height / 2), withAttributes: attrs)
+    }
+
+    // MARK: Dragging destination
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation { draggingUpdated(sender) }
+
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        let idx = petalIndex(at: convert(sender.draggingLocation, from: nil))
+        if idx != hovered {
+            hovered = idx
+            if idx != nil { MainActor.assumeIsolated { Feedback.tick() } }
+            needsDisplay = true
+        }
+        return idx == nil ? [] : .copy
+    }
+
+    override func draggingExited(_ sender: NSDraggingInfo?) {
+        hovered = nil
+        needsDisplay = true
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        guard let idx = petalIndex(at: convert(sender.draggingLocation, from: nil)) else { return false }
+        let dropped = (sender.draggingPasteboard.readObjects(forClasses: [NSURL.self],
+                                                             options: [.urlReadingFileURLsOnly: true]) as? [URL]) ?? []
+        let targets = dropped.isEmpty ? urls : dropped
+        let action = petals[idx].action
+        let finish = onFinish
+        DispatchQueue.main.async {
+            finish()
+            ActionRunner.run(action, on: targets)
+        }
+        return true
+    }
+}
+
+extension NSImage {
+    func tinted(_ color: NSColor) -> NSImage {
+        let img = NSImage(size: size)
+        img.lockFocus()
+        draw(in: NSRect(origin: .zero, size: size))
+        color.set()
+        NSRect(origin: .zero, size: size).fill(using: .sourceAtop)
+        img.unlockFocus()
+        return img
+    }
+}
+
+extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
+}
