@@ -86,12 +86,21 @@ struct GlassWheelView: View {
 
     var body: some View {
         let d = model.diameter
-        GlassEffectContainer(spacing: 6) {
+        // The container lifts glass above its other descendants, so text lives in a separate layer on top.
+        ZStack {
+            GlassEffectContainer(spacing: 6) {
+                ZStack {
+                    ForEach(model.petals.indices, id: \.self) { i in petal(i, size: d) }
+                    hub
+                }
+                .frame(width: d, height: d)
+            }
             ZStack {
-                ForEach(model.petals.indices, id: \.self) { i in petal(i, size: d) }
-                hub
+                ForEach(model.petals.indices, id: \.self) { i in petalLabel(i, size: d) }
+                hubText
             }
             .frame(width: d, height: d)
+            .allowsHitTesting(false)
         }
         .frame(width: d, height: d)
         .onAppear {
@@ -104,23 +113,36 @@ struct GlassWheelView: View {
         let isHover = model.hovered == i
         let tint: Color? = isHover ? lime.opacity(0.75) : p.isConversion ? lime.opacity(0.16) : nil
         let shape = AnnularSector(inner: p.inner, outer: p.outer, start: p.start, end: p.end, grow: isHover ? 6 : 0)
+        return Color.clear
+            .frame(width: d, height: d)
+            .glassEffect(base(tint), in: shape)
+            .modifier(Entrance(index: i, appeared: model.appeared, hovered: isHover))
+    }
+
+    private func petalLabel(_ i: Int, size d: CGFloat) -> some View {
+        let p = model.petals[i]
+        let isHover = model.hovered == i
         let mid = (p.start + p.end) / 2, r = (p.inner + p.outer) / 2 + (isHover ? 2 : 0)
         let maxWidth = min(p.outer - p.inner - 8, (p.end - p.start) * r - 6)
-        // Stagger the opening spring outward from 12 o'clock.
-        let delay = Double(i) * 0.012
+        return label(p.action, highlighted: isHover, maxWidth: maxWidth)
+            .position(x: d / 2 + cos(mid) * r, y: d / 2 - sin(mid) * r)
+            .frame(width: d, height: d)
+            .modifier(Entrance(index: i, appeared: model.appeared, hovered: isHover))
+    }
 
-        return ZStack {
-            Color.clear
-                .frame(width: d, height: d)
-                .glassEffect(base(tint), in: shape)
-            label(p.action, highlighted: isHover, maxWidth: maxWidth)
-                .position(x: d / 2 + cos(mid) * r, y: d / 2 - sin(mid) * r)
+    /// Shared by a petal's glass and its label so both spring in together.
+    private struct Entrance: ViewModifier {
+        let index: Int
+        let appeared: Bool
+        let hovered: Bool
+        func body(content: Content) -> some View {
+            content
+                .scaleEffect(appeared ? 1 : 0.55)
+                .opacity(appeared ? 1 : 0)
+                // Stagger the opening spring outward from 12 o'clock.
+                .animation(.spring(response: 0.34, dampingFraction: 0.7).delay(Double(index) * 0.012), value: appeared)
+                .animation(.spring(response: 0.22, dampingFraction: 0.6), value: hovered)
         }
-        .frame(width: d, height: d)
-        .scaleEffect(model.appeared ? 1 : 0.55)
-        .opacity(model.appeared ? 1 : 0)
-        .animation(.spring(response: 0.34, dampingFraction: 0.7).delay(delay), value: model.appeared)
-        .animation(.spring(response: 0.22, dampingFraction: 0.6), value: isHover)
     }
 
     private func label(_ action: WheelAction, highlighted: Bool, maxWidth: CGFloat) -> some View {
@@ -141,6 +163,14 @@ struct GlassWheelView: View {
 
     private var hub: some View {
         let h = model.hub
+        return Color.clear
+            .frame(width: 2 * h, height: 2 * h)
+            .glassEffect(base(lime.opacity(0.55)), in: Circle())
+            .scaleEffect(model.appeared ? 1 : 0.7)
+    }
+
+    private var hubText: some View {
+        let h = model.hub
         return VStack(spacing: 2) {
             Text(model.title).font(.system(size: 15, weight: .bold))
             Text(model.subtitle).font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary)
@@ -148,8 +178,6 @@ struct GlassWheelView: View {
         .lineLimit(1)
         .minimumScaleFactor(0.6)
         .frame(width: 2 * h - 14)
-        .frame(width: 2 * h, height: 2 * h)
-        .glassEffect(base(lime.opacity(0.55)), in: Circle())
         .scaleEffect(model.appeared ? 1 : 0.7)
         .animation(.spring(response: 0.18, dampingFraction: 0.6), value: model.hovered)
     }
