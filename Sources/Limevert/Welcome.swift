@@ -23,24 +23,46 @@ struct LimeMark: View {
         }
     }
 
-    /// Template image for the menu bar: a slice outline with segments.
+    /// Template image for the menu bar: a lime slice (rind, six segments) with a leaf at the top right.
     static func menuBarImage() -> NSImage {
         let img = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { rect in
-            let r = rect.insetBy(dx: 1.5, dy: 1.5)
             NSColor.black.set()
-            let ring = NSBezierPath(ovalIn: r)
-            ring.lineWidth = 1.6
-            ring.stroke()
-            let c = NSPoint(x: rect.midX, y: rect.midY)
-            let radius = r.width / 2 - 2.6
+            let c = NSPoint(x: rect.midX - 1.6, y: rect.midY - 1.4)
+            let rind: CGFloat = 7.3, pith = rind - 1.5
+            NSBezierPath(ovalIn: NSRect(x: c.x - rind, y: c.y - rind, width: 2 * rind, height: 2 * rind)).fill()
+            NSGraphicsContext.current?.compositingOperation = .clear
+            NSBezierPath(ovalIn: NSRect(x: c.x - pith, y: c.y - pith, width: 2 * pith, height: 2 * pith)).fill()
+            NSGraphicsContext.current?.compositingOperation = .sourceOver
+
+            let flesh = pith - 0.9, step = CGFloat.pi / 3, gap: CGFloat = 0.42
             for i in 0..<6 {
-                let a = CGFloat(i) * .pi / 3 + .pi / 6
+                let a0 = CGFloat(i) * step + gap / 2, a1 = a0 + step - gap
                 let p = NSBezierPath()
-                p.move(to: c)
-                p.line(to: NSPoint(x: c.x + cos(a) * radius, y: c.y + sin(a) * radius))
-                p.lineWidth = 1.2
-                p.stroke()
+                p.move(to: NSPoint(x: c.x + cos((a0 + a1) / 2) * 1.3, y: c.y + sin((a0 + a1) / 2) * 1.3))
+                p.line(to: NSPoint(x: c.x + cos(a0) * flesh, y: c.y + sin(a0) * flesh))
+                p.appendArc(withCenter: c, radius: flesh, startAngle: a0 * 180 / .pi, endAngle: a1 * 180 / .pi)
+                p.close()
+                p.fill()
             }
+
+            // Leaf: clear a slightly larger halo first so it separates from the rind.
+            let base = NSPoint(x: c.x + 4.4, y: c.y + 4.4)
+            let t = NSAffineTransform()
+            t.translateX(by: base.x, yBy: base.y)
+            t.rotate(byDegrees: 30)
+            NSGraphicsContext.current?.compositingOperation = .clear
+            let halo = NSBezierPath(ovalIn: NSRect(x: -0.6, y: -2.3, width: 6.8, height: 4.6))
+            halo.transform(using: t as AffineTransform)
+            halo.fill()
+            NSGraphicsContext.current?.compositingOperation = .sourceOver
+            let L: CGFloat = 5.6, W: CGFloat = 1.9
+            let leaf = NSBezierPath()
+            leaf.move(to: .zero)
+            leaf.curve(to: NSPoint(x: L, y: 0), controlPoint1: NSPoint(x: L * 0.3, y: W), controlPoint2: NSPoint(x: L * 0.75, y: W * 0.8))
+            leaf.curve(to: .zero, controlPoint1: NSPoint(x: L * 0.75, y: -W * 0.8), controlPoint2: NSPoint(x: L * 0.3, y: -W))
+            leaf.close()
+            leaf.transform(using: t as AffineTransform)
+            leaf.fill()
             return true
         }
         img.isTemplate = true
