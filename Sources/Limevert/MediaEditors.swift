@@ -14,10 +14,13 @@ func timecode(_ s: Double) -> String {
 // MARK: - Timeline
 
 final class TimelineDrag: ObservableObject {
+    enum Target { case start, end, scrub, span }
     @Published var span: ClosedRange<Double>?
+    @Published var target: Target?
 }
 
 /// Scrubbable strip with an optional trim range, markers, highlighted spans and a playhead.
+/// One gesture handles everything: where a drag begins decides whether it moves a trim handle, scrubs or marks a span.
 struct Timeline<Background: View>: View {
     let duration: Double
     let current: Double
@@ -30,6 +33,11 @@ struct Timeline<Background: View>: View {
     var onSpan: ((ClosedRange<Double>) -> Void)? = nil
     let background: Background
     @StateObject private var drag = TimelineDrag()
+
+    /// Keeps handles inside the strip's bounds, so the ones at either end are as easy to grab as the rest.
+    private let inset: CGFloat = 8
+    /// How far from a handle a drag may start and still grab it.
+    private let grabRadius: CGFloat = 16
 
     init(duration: Double, current: Double, start: Binding<Double>? = nil, end: Binding<Double>? = nil,
          markers: [Double] = [], spans: [ClosedRange<Double>] = [], seek: @escaping (Double) -> Void,
@@ -47,68 +55,86 @@ struct Timeline<Background: View>: View {
 
     var body: some View {
         GeometryReader { g in
-            let w = g.size.width, h = g.size.height
-            let x: (Double) -> CGFloat = { t in duration > 0 ? CGFloat(t / duration) * w : 0 }
-            let time: (CGFloat) -> Double = { px in duration * Double(min(max(px / w, 0), 1)) }
+            let w = max(1, g.size.width - 2 * inset), h = g.size.height
+            let x: (Double) -> CGFloat = { t in inset + (duration > 0 ? CGFloat(t / duration) * w : 0) }
+            let time: (CGFloat) -> Double = { px in duration * Double(min(max((px - inset) / w, 0), 1)) }
             ZStack(alignment: .topLeading) {
                 background
                     .frame(width: w, height: h)
                     .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .offset(x: inset)
                 ForEach(Array((spans + (drag.span.map { [$0] } ?? [])).enumerated()), id: \.offset) { _, s in
                     Rectangle().fill(Color.red.opacity(0.4))
                         .frame(width: max(2, x(s.upperBound) - x(s.lowerBound)), height: h)
                         .offset(x: x(s.lowerBound))
                 }
                 if let start, let end {
-                    Color.black.opacity(0.55).frame(width: max(0, x(start.wrappedValue)), height: h)
-                    Color.black.opacity(0.55).frame(width: max(0, w - x(end.wrappedValue)), height: h).offset(x: x(end.wrappedValue))
+                    Color.black.opacity(0.55).frame(width: max(0, x(start.wrappedValue) - inset), height: h).offset(x: inset)
+                    Color.black.opacity(0.55).frame(width: max(0, inset + w - x(end.wrappedValue)), height: h).offset(x: x(end.wrappedValue))
                     RoundedRectangle(cornerRadius: 6)
                         .strokeBorder(Color(nsColor: Brand.lime), lineWidth: 3)
                         .frame(width: max(6, x(end.wrappedValue) - x(start.wrappedValue)), height: h)
                         .offset(x: x(start.wrappedValue))
-                        .allowsHitTesting(false)
                 }
                 ForEach(markers, id: \.self) { m in
                     Rectangle().fill(Color.yellow).frame(width: 2, height: h).offset(x: x(m) - 1)
                 }
                 Rectangle().fill(Color.white).frame(width: 2, height: h + 10).offset(x: x(current) - 1, y: -5)
                     .shadow(color: .black.opacity(0.5), radius: 1)
-                    .allowsHitTesting(false)
                 if let start, let end {
-                    handle.position(x: x(start.wrappedValue), y: h / 2)
-                        .highPriorityGesture(DragGesture(coordinateSpace: .named("timeline")).onChanged { v in
-                            start.wrappedValue = min(time(v.location.x), end.wrappedValue - 0.1)
-                            seek(start.wrappedValue)
-                        })
-                    handle.position(x: x(end.wrappedValue), y: h / 2)
-                        .highPriorityGesture(DragGesture(coordinateSpace: .named("timeline")).onChanged { v in
-                            end.wrappedValue = max(time(v.location.x), start.wrappedValue + 0.1)
-                            seek(end.wrappedValue)
-                        })
+                    handle(active: drag.target == .start).position(x: x(start.wrappedValue), y: h / 2)
+                    handle(active: drag.target == .end).position(x: x(end.wrappedValue), y: h / 2)
                 }
             }
-            .frame(width: w, height: h, alignment: .topLeading)
-            .contentShape(Rectangle())
-            .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .named("timeline"))
-                .onChanged { v in
-                    if onSpan != nil, abs(v.translation.width) > 3 {
-                        let a = time(v.startLocation.x), b = time(v.location.x)
-                        drag.span = min(a, b)...max(a, b)
-                    } else {
-                        seek(time(v.location.x))
-                    }
-                }
-                .onEnded { _ in
-                    if let s = drag.span, s.upperBound - s.lowerBound > 0.05 { onSpan?(s) }
-                    drag.span = nil
-                })
+            .frame(width: g.size.width, height: h, alignment: .topLeading)
+            .allowsHitTesting(false)
             .coordinateSpace(name: "timeline")
+            .overlay(
+                // The grab area reaches a little past both ends, so a handle at the edge is easy to catch.
+                Color.clear
+                    .contentShape(Rectangle())
+                    .padding(.horizontal, -grabRadius)
+                    .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .named("timeline"))
+                        .onChanged { v in
+                            if drag.target == nil { drag.target = target(at: v.startLocation.x, x: x) }
+                            switch drag.target {
+                            case .start:
+                                if let start, let end { start.wrappedValue = min(time(v.location.x), end.wrappedValue - 0.1); seek(start.wrappedValue) }
+                            case .end:
+                                if let start, let end { end.wrappedValue = max(time(v.location.x), start.wrappedValue + 0.1); seek(end.wrappedValue) }
+                            case .span, .scrub:
+                                if onSpan != nil, abs(v.translation.width) > 3 {
+                                    drag.target = .span
+                                    let a = time(v.startLocation.x), b = time(v.location.x)
+                                    drag.span = min(a, b)...max(a, b)
+                                } else {
+                                    seek(time(v.location.x))
+                                }
+                            case nil: break
+                            }
+                        }
+                        .onEnded { _ in
+                            if drag.target == .span, let s = drag.span, s.upperBound - s.lowerBound > 0.05 { onSpan?(s) }
+                            drag.span = nil
+                            drag.target = nil
+                        })
+            )
         }
     }
 
-    private var handle: some View {
-        Capsule().fill(Color.white)
-            .frame(width: 10, height: 30)
+    /// The nearer trim handle within reach of `px`, otherwise scrubbing.
+    private func target(at px: CGFloat, x: (Double) -> CGFloat) -> TimelineDrag.Target {
+        guard let start, let end else { return .scrub }
+        let ds = abs(px - x(start.wrappedValue)), de = abs(px - x(end.wrappedValue))
+        guard min(ds, de) <= grabRadius else { return .scrub }
+        // When the handles overlap, pick the one whose direction the drag can still go.
+        if abs(ds - de) < 1 { return px >= x(end.wrappedValue) ? .end : .start }
+        return ds < de ? .start : .end
+    }
+
+    private func handle(active: Bool) -> some View {
+        Capsule().fill(active ? Color(nsColor: Brand.lime) : Color.white)
+            .frame(width: 12, height: 32)
             .overlay(Capsule().strokeBorder(Color(nsColor: Brand.limeDeep), lineWidth: 2))
             .shadow(color: .black.opacity(0.4), radius: 2)
     }
