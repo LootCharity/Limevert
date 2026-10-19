@@ -13,41 +13,65 @@ enum ActionRunner {
         case .tool(.terminal): InstantActions.openTerminal(urls)
         case .tool(.moveTo): InstantActions.moveTo(urls)
         case .tool(.readQR): readQR(urls)
+        case .tool(let tool) where tool.opensEditor: Editors.open(tool, urls)
         default: background(action, urls)
         }
     }
 
     private static func background(_ action: WheelAction, _ urls: [URL]) {
-        let task = HUD.shared.begin("\(action.label) · \(urls.count == 1 ? urls[0].lastPathComponent : "\(urls.count) files")")
-        Task.detached(priority: .userInitiated) {
-            var outputs: [URL] = []
-            var failures: [String] = []
+        let title = "\(action.label) · \(urls.count == 1 ? urls[0].lastPathComponent : "\(urls.count) files")"
+        perform(title, history: action.label) { progress in
             switch action {
             case .convert(let fmt):
+                var outputs: [URL] = [], failures: [String] = []
                 for (i, url) in urls.enumerated() {
                     do { outputs += try await Converter.convert(url, to: fmt) }
                     catch { failures.append("\(url.lastPathComponent): \(error.localizedDescription)") }
-                    await MainActor.run { HUD.shared.progress(task, Double(i + 1) / Double(urls.count)) }
+                    progress(Double(i + 1) / Double(urls.count))
                 }
+                if !failures.isEmpty { throw PartialFailure(outputs: outputs, failures: failures) }
+                return outputs
             case .tool(let tool):
-                do { outputs = try await FileTools.run(tool, on: urls) }
-                catch { failures.append(error.localizedDescription) }
+                return try await FileTools.run(tool, on: urls)
             }
-            let done = outputs, failed = failures
-            await MainActor.run { finish(task, action: action, outputs: done, failures: failed) }
         }
     }
 
-    private static func finish(_ task: UUID, action: WheelAction, outputs: [URL], failures: [String]) {
+    /// Some files converted, some didn't.
+    struct PartialFailure: Error {
+        let outputs: [URL]
+        let failures: [String]
+    }
+
+    /// Runs work in the background with a HUD entry, then records, announces and optionally reveals the results.
+    /// Editors use this for their Save button.
+    static func perform(_ title: String, history: String? = nil,
+                        _ work: @escaping @Sendable (_ progress: @escaping @Sendable (Double) -> Void) async throws -> [URL]) {
+        let task = HUD.shared.begin(title)
+        Task.detached(priority: .userInitiated) {
+            var outputs: [URL] = [], failures: [String] = []
+            do {
+                outputs = try await work { value in Task { @MainActor in HUD.shared.progress(task, value) } }
+            } catch let partial as PartialFailure {
+                outputs = partial.outputs; failures = partial.failures
+            } catch {
+                failures = [error.localizedDescription]
+            }
+            let done = outputs, failed = failures
+            await MainActor.run { finish(task, title: history ?? title, outputs: done, failures: failed) }
+        }
+    }
+
+    private static func finish(_ task: UUID, title: String, outputs: [URL], failures: [String]) {
         HUD.shared.end(task)
-        TaskHistory.shared.record(action.label, outputs: outputs, failures: failures)
+        TaskHistory.shared.record(title, outputs: outputs, failures: failures)
         if failures.isEmpty {
             Feedback.success()
             HUD.shared.flash(outputs.count == 1 ? "Saved \(outputs[0].lastPathComponent)" : "Saved \(outputs.count) files")
         } else {
             Feedback.failure()
             let alert = NSAlert()
-            alert.messageText = outputs.isEmpty ? "\(action.label) failed" : "Finished with errors"
+            alert.messageText = outputs.isEmpty ? "\(title) failed" : "Finished with errors"
             alert.informativeText = failures.prefix(6).joined(separator: "\n")
             NSApp.activate(ignoringOtherApps: true)
             alert.runModal()

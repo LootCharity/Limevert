@@ -29,7 +29,7 @@ enum FileKind: String {
 /// Output formats Limevert can write.
 enum OutputFormat: String, CaseIterable {
     // images
-    case png, jpeg, heic, tiff, gif, bmp, webp, icns, imagePDF
+    case png, jpeg, heic, avif, tiff, gif, bmp, webp, icns, imagePDF
     // video
     case mp4, mov, m4v, animatedGIF
     // audio
@@ -43,7 +43,7 @@ enum OutputFormat: String, CaseIterable {
 
     var label: String {
         switch self {
-        case .png: "PNG"; case .jpeg: "JPEG"; case .heic: "HEIC"; case .tiff: "TIFF"
+        case .png: "PNG"; case .jpeg: "JPEG"; case .heic: "HEIC"; case .avif: "AVIF"; case .tiff: "TIFF"
         case .gif, .animatedGIF: "GIF"; case .bmp: "BMP"; case .webp: "WebP"; case .icns: "ICNS"
         case .imagePDF, .docPDF: "PDF"
         case .mp4: "MP4"; case .mov: "MOV"; case .m4v: "M4V"
@@ -56,7 +56,7 @@ enum OutputFormat: String, CaseIterable {
 
     var fileExtension: String {
         switch self {
-        case .png, .pdfToPNG: "png"; case .jpeg, .pdfToJPEG: "jpg"; case .heic: "heic"; case .tiff: "tiff"
+        case .png, .pdfToPNG: "png"; case .jpeg, .pdfToJPEG: "jpg"; case .heic: "heic"; case .avif: "avif"; case .tiff: "tiff"
         case .gif, .animatedGIF: "gif"; case .bmp: "bmp"; case .webp: "webp"; case .icns: "icns"
         case .imagePDF, .docPDF: "pdf"
         case .mp4: "mp4"; case .mov: "mov"; case .m4v: "m4v"
@@ -70,7 +70,7 @@ enum OutputFormat: String, CaseIterable {
     /// ImageIO type identifier for still-image outputs.
     var imageType: UTType? {
         switch self {
-        case .png: .png; case .jpeg: .jpeg; case .heic: .heic; case .tiff: .tiff
+        case .png: .png; case .jpeg: .jpeg; case .heic: .heic; case .avif: UTType("public.avif"); case .tiff: .tiff
         case .gif: .gif; case .bmp: .bmp; case .webp: .webP; case .icns: .icns
         default: nil
         }
@@ -106,7 +106,14 @@ enum WheelAction: Hashable {
 }
 
 enum FileToolKind: String, CaseIterable {
-    case compress, removeMetadata, resize, rotate, readQR, combinePDF, mergePDF, extractAudio
+    case compress, removeMetadata, resize, rotate, flip, removeBackground, readQR, combinePDF, mergePDF, splitPDF
+    case extractAudio, mute, joinVideos, normalize, mono, stereo
+    // editors
+    case crop, adjust, annotate, redact, frame, collage
+    case trimVideo, splitVideo, speed, snapshot
+    case trimAudio, bleep, visualize
+    case organizePDF
+    // shared
     case zip, unzip, float, copyPaths, copyFiles, airDrop, terminal, moveTo
 
     var label: String {
@@ -115,10 +122,31 @@ enum FileToolKind: String, CaseIterable {
         case .removeMetadata: "Strip Metadata"
         case .resize: "Resize 50%"
         case .rotate: "Rotate"
+        case .flip: "Flip"
+        case .removeBackground: "Remove BG"
         case .readQR: "Read QR"
         case .combinePDF: "Combine PDF"
         case .mergePDF: "Merge PDFs"
+        case .splitPDF: "Split Pages"
         case .extractAudio: "Extract Audio"
+        case .mute: "Mute"
+        case .joinVideos: "Join"
+        case .normalize: "Normalize"
+        case .mono: "Mono"
+        case .stereo: "Stereo"
+        case .crop: "Crop"
+        case .adjust: "Adjust"
+        case .annotate: "Annotate"
+        case .redact: "Redact"
+        case .frame: "Frame"
+        case .collage: "Collage"
+        case .trimVideo, .trimAudio: "Trim"
+        case .splitVideo: "Split"
+        case .speed: "Speed"
+        case .snapshot: "Snapshot"
+        case .bleep: "Bleep"
+        case .visualize: "Visualizer"
+        case .organizePDF: "Organize"
         case .zip: "Zip"
         case .unzip: "Unzip"
         case .float: "Float"
@@ -136,9 +164,30 @@ enum FileToolKind: String, CaseIterable {
         case .removeMetadata: "eye.slash"
         case .resize: "arrow.up.left.and.down.right.magnifyingglass"
         case .rotate: "rotate.right"
+        case .flip: "arrow.left.and.right.righttriangle.left.righttriangle.right"
+        case .removeBackground: "wand.and.stars"
         case .readQR: "qrcode.viewfinder"
         case .combinePDF, .mergePDF: "doc.on.doc"
+        case .splitPDF: "square.split.1x2"
         case .extractAudio: "waveform"
+        case .mute: "speaker.slash"
+        case .joinVideos: "film.stack"
+        case .normalize: "speaker.wave.3"
+        case .mono: "speaker"
+        case .stereo: "hifispeaker.2"
+        case .crop: "crop"
+        case .adjust: "slider.horizontal.3"
+        case .annotate: "pencil.tip.crop.circle"
+        case .redact: "rectangle.inset.filled"
+        case .frame: "photo.artframe"
+        case .collage: "square.grid.2x2"
+        case .trimVideo, .trimAudio: "scissors"
+        case .splitVideo: "square.split.2x1"
+        case .speed: "gauge.with.dots.needle.67percent"
+        case .snapshot: "camera"
+        case .bleep: "exclamationmark.bubble"
+        case .visualize: "waveform.path"
+        case .organizePDF: "square.grid.3x3"
         case .zip: "doc.zipper"
         case .unzip: "archivebox"
         case .float: "rectangle.stack"
@@ -149,30 +198,43 @@ enum FileToolKind: String, CaseIterable {
         case .moveTo: "folder"
         }
     }
+
+    /// Tools that open an editor window instead of running straight away.
+    var opensEditor: Bool {
+        switch self {
+        case .crop, .adjust, .annotate, .redact, .frame, .collage, .trimVideo, .splitVideo, .speed, .snapshot,
+             .trimAudio, .bleep, .visualize, .organizePDF: true
+        default: false
+        }
+    }
 }
 
 enum ActionCatalog {
     /// Petals offered for a set of dragged files. Conversions first, then tools, then shared file actions.
     static func actions(for urls: [URL]) -> [WheelAction] {
         let kinds = Set(urls.map(FileKind.of))
+        let single = urls.count == 1
         var conversions: [OutputFormat] = []
         var tools: [FileToolKind] = []
 
         if kinds.count == 1, let kind = kinds.first {
             switch kind {
             case .image:
-                conversions = [.png, .jpeg, .heic, .webp, .tiff, .gif, .bmp, .icns, .imagePDF]
-                tools = [.compress, .removeMetadata, .resize, .rotate, .readQR]
-                if urls.count > 1 { tools.append(.combinePDF) }
+                conversions = [.png, .jpeg, .heic, .avif, .webp, .tiff, .gif, .bmp, .icns, .imagePDF]
+                tools = [.compress, .removeMetadata, .resize, .rotate, .flip, .removeBackground, .readQR]
+                tools += single ? [.crop, .adjust, .annotate, .redact, .frame] : [.combinePDF, .collage]
             case .video:
                 conversions = [.mp4, .mov, .m4v, .animatedGIF]
-                tools = [.compress, .removeMetadata, .extractAudio]
+                tools = [.compress, .removeMetadata, .extractAudio, .mute]
+                tools += single ? [.trimVideo, .splitVideo, .speed, .snapshot] : [.joinVideos]
             case .audio:
                 conversions = [.m4a, .wav, .aiff, .flac, .alac, .caf]
+                tools = [.normalize, .mono, .stereo]
+                if single { tools += [.trimAudio, .bleep, .visualize] }
             case .pdf:
                 conversions = [.pdfToPNG, .pdfToJPEG, .pdfToText, .pdfToRTF]
-                tools = [.compress, .removeMetadata, .readQR]
-                if urls.count > 1 { tools.append(.mergePDF) }
+                tools = [.compress, .removeMetadata, .readQR, .splitPDF]
+                tools += single ? [.organizePDF] : [.mergePDF]
             case .document:
                 conversions = [.docx, .docPDF, .rtf, .txt, .html, .odt, .markdown]
             case .subtitle:
@@ -192,6 +254,8 @@ enum ActionCatalog {
 
         var shared: [FileToolKind] = [.float, .zip, .copyPaths, .airDrop, .moveTo]
         if kinds == [.folder] { shared.insert(.terminal, at: 1) }
-        return conversions.map { .convert($0) } + tools.map { .tool($0) } + shared.map { .tool($0) }
+        // Editors last, so the wheel can give them their own ring.
+        let quick = tools.filter { !$0.opensEditor }, editors = tools.filter(\.opensEditor)
+        return conversions.map { .convert($0) } + (quick + shared + editors).map { .tool($0) }
     }
 }

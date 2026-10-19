@@ -108,8 +108,12 @@ final class WheelView: NSView {
         let conversions = actions.filter { if case .convert = $0 { true } else { false } }
         let tools = actions.filter { if case .tool = $0 { true } else { false } }
         // Conversions on the inner ring, tools on the outer one; a single long list is split in two.
+        let editors = tools.filter { if case .tool(let t) = $0 { t.opensEditor } else { false } }
         let layout: [[WheelAction]]
-        if !conversions.isEmpty && !tools.isEmpty { layout = [conversions, tools] }
+        // Editors get a third ring when there are enough of them, so labels stay readable.
+        if !conversions.isEmpty && editors.count >= 3 {
+            layout = [conversions, tools.filter { !editors.contains($0) }, editors]
+        } else if !conversions.isEmpty && !tools.isEmpty { layout = [conversions, tools] }
         else if actions.count > 12 { layout = [Array(actions.prefix(8)), Array(actions.dropFirst(8))] }
         else { layout = [actions] }
         rings = layout.count

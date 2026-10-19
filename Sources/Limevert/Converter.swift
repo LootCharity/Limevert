@@ -118,7 +118,7 @@ enum Images {
             return out
         }
         if [.jpeg, .bmp].contains(fmt) { img = flattened(img) }
-        let quality = [.jpeg, .heic, .webp].contains(fmt) ? Settings.shared.imageQuality : nil
+        let quality = [.jpeg, .heic, .avif, .webp].contains(fmt) ? Settings.shared.imageQuality : nil
         try write([img], to: out, type: type, quality: quality)
         return out
     }
@@ -196,7 +196,7 @@ enum Images {
 
 enum Media {
     static func export(_ asset: AVAsset, preset: String, to out: URL, type: AVFileType,
-                       stripMetadata: Bool = false) async throws {
+                       stripMetadata: Bool = false, timeRange: CMTimeRange? = nil) async throws {
         guard let session = AVAssetExportSession(asset: asset, presetName: preset) else {
             throw ConversionError("No installed converter for this file.")
         }
@@ -206,6 +206,8 @@ enum Media {
         session.outputURL = out
         session.outputFileType = type
         session.shouldOptimizeForNetworkUse = true
+        session.audioTimePitchAlgorithm = .spectral
+        if let timeRange { session.timeRange = timeRange }
         if stripMetadata {
             session.metadata = []
             session.metadataItemFilter = .forSharing()

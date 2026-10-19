@@ -161,15 +161,16 @@ struct SettingsView: View {
 /// Supported-formats overview, grouped by source kind.
 struct FormatMatrixView: View {
     private let groups: [(String, String, [String])] = [
-        ("Images", "photo", ["PNG", "JPEG", "HEIC", "WebP", "TIFF", "GIF", "BMP", "ICNS", "PDF"]),
-        ("Video", "film", ["MP4", "MOV", "M4V", "GIF", "M4A audio"]),
-        ("Audio", "waveform", ["M4A (AAC)", "ALAC", "WAV", "AIFF", "FLAC", "CAF"]),
-        ("PDF", "doc.richtext", ["PNG pages", "JPEG pages", "TXT", "RTF", "Merge", "Compress"]),
+        ("Images", "photo", ["PNG", "JPEG", "HEIC", "AVIF", "WebP", "TIFF", "GIF", "BMP", "ICNS", "PDF",
+                             "Crop", "Adjust", "Annotate", "Redact", "Frame", "Collage", "Remove BG", "Flip"]),
+        ("Video", "film", ["MP4", "MOV", "M4V", "GIF", "M4A audio", "Trim", "Split", "Speed", "Snapshot", "Mute", "Join"]),
+        ("Audio", "waveform", ["M4A (AAC)", "ALAC", "WAV", "AIFF", "FLAC", "CAF", "Trim", "Bleep", "Normalize",
+                               "Mono", "Stereo", "Visualizer"]),
+        ("PDF", "doc.richtext", ["PNG pages", "JPEG pages", "TXT", "RTF", "Merge", "Split Pages", "Organize", "Compress"]),
         ("Documents", "doc.text", ["DOCX", "PDF", "RTF", "TXT", "HTML", "ODT", "Markdown"]),
         ("Subtitles", "captions.bubble", ["SRT", "VTT"]),
         ("Any file", "folder", ["Float", "Zip", "Copy Paths", "AirDrop", "Move To…", "Terminal"]),
     ]
-
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {

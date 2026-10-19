@@ -6,10 +6,14 @@ A free, open-source menu bar file converter for macOS. Drag files, tap ⌥ Optio
 
 ## Features
 
-- **Images:** JPEG, HEIC, TIFF, GIF, BMP, ICNS, PDF; compress, strip metadata, resize, rotate, read QR codes
-- **Video:** MP4, M4V, MOV, GIF; compress, strip metadata, extract audio
-- **Audio:** M4A, ALAC, WAV, AIFF, FLAC, CAF
-- **PDF:** pages to PNG/JPEG, text, RTF; compress, merge, strip metadata
+- **Images:** JPEG, HEIC, AVIF, TIFF, GIF, BMP, ICNS, PDF; compress, strip metadata, resize, rotate, flip, remove background, read QR codes, combine into a PDF
+  - Editors: **crop** (with aspect ratios), **adjust** (exposure, contrast, highlights, shadows, saturation, warmth, sharpness), **annotate** (pen, highlighter, arrows, shapes, text), **redact** (pixelate, blur or black out, with automatic face and text detection), **frame** (gradient backgrounds, padding, rounded corners, shadow) and **collage**
+- **Video:** MP4, M4V, MOV, GIF; compress, strip metadata, extract audio, mute, join clips
+  - Editors: **trim**, **split** into parts, change **speed** (0.25×–4×, pitch kept) and save **snapshots** of frames
+- **Audio:** M4A, ALAC, WAV, AIFF, FLAC, CAF; normalize volume, mono, stereo
+  - Editors: **trim** (with automatic silence trimming), **bleep** or mute sections, and render a **visualizer** video
+- **PDF:** pages to PNG/JPEG, text, RTF; compress, merge, split into pages, strip metadata
+  - Editor: **organize** pages (reorder, rotate, delete)
 - **Documents:** DOCX, RTF, TXT, HTML, ODT, Markdown, PDF
 - **Subtitles:** SRT ↔ VTT
 - **Any file:** Zip/Unzip, Copy Paths, AirDrop, Move To…, open in Terminal

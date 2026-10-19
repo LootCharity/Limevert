@@ -14,6 +14,8 @@ enum FileTools {
             return [try PDFs.merge(urls)]
         case .zip:
             return [try zip(urls)]
+        case .joinVideos:
+            return [try await VideoEdits.join(urls)]
         default:
             var outputs: [URL] = []
             for url in urls { outputs += try await runSingle(tool, on: url) }
@@ -31,6 +33,15 @@ enum FileTools {
         case (.removeMetadata, .video): return [try await Media.stripVideoMetadata(url)]
         case (.resize, .image): return [try edit(url, suffix: "resized") { try Images.scaled($0, by: 0.5) }]
         case (.rotate, .image): return [try edit(url, suffix: "rotated") { try Images.rotated90($0) }]
+        case (.flip, .image): return [try edit(url, suffix: "flipped") { try ImageEdits.flipped($0) }]
+        case (.removeBackground, .image):
+            return [try ImageEdits.save(try ImageEdits.removeBackground(try Images.loadOriented(url)),
+                                        beside: url, suffix: "no background", type: .png)]
+        case (.splitPDF, .pdf): return try PDFEdits.split(url)
+        case (.mute, .video): return [try await VideoEdits.mute(url)]
+        case (.normalize, .audio): return [try AudioEdits.normalize(url)]
+        case (.mono, .audio): return [try AudioEdits.channels(url, mono: true)]
+        case (.stereo, .audio): return [try AudioEdits.channels(url, mono: false)]
         case (.extractAudio, .video): return [try await Media.extractAudio(url)]
         case (.unzip, .archive): return [try unzip(url)]
         default: throw ConversionError("\(tool.label) is unavailable for this file type.")

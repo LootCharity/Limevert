@@ -10,7 +10,7 @@ let package = Package(
             path: "Sources/Limevert",
             linkerSettings: [
                 .linkedFramework("AppKit"), .linkedFramework("SwiftUI"),
-                .linkedFramework("AVFoundation"), .linkedFramework("PDFKit"),
+                .linkedFramework("AVFoundation"), .linkedFramework("AVKit"), .linkedFramework("PDFKit"),
                 .linkedFramework("Quartz"), .linkedFramework("Vision"),
                 .linkedFramework("ServiceManagement"), .linkedFramework("UniformTypeIdentifiers"),
             ]
