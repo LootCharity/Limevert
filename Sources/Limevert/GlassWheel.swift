@@ -1,8 +1,8 @@
 import AppKit
 import SwiftUI
 
-/// Glass style for the wheel on macOS 26 and later.
-enum WheelGlass: String, CaseIterable, Identifiable {
+/// Glass style used across the app on macOS 26 and later (stored under the original "wheelGlass" key).
+enum GlassStyle: String, CaseIterable, Identifiable {
     case regular, clear
     var id: String { rawValue }
     var label: String { self == .regular ? "Regular" : "Clear" }
@@ -82,7 +82,7 @@ final class PassthroughHostingView<Content: View>: NSHostingView<Content> {
 @available(macOS 26, *)
 struct GlassWheelView: View {
     @ObservedObject var model: WheelModel
-    let style: WheelGlass
+    let style: GlassStyle
 
     private var lime: Color { Color(nsColor: Brand.lime) }
     private func base(_ tint: Color?) -> Glass {

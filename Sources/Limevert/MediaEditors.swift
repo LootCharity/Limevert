@@ -251,9 +251,12 @@ struct VideoEditor: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                 HStack(spacing: 12) {
                     Button(action: model.togglePlay) {
-                        Image(systemName: model.playing ? "pause.fill" : "play.fill").frame(width: 18)
+                        Image(systemName: model.playing ? "pause.fill" : "play.fill").frame(width: 18, height: 18)
                     }
                     .keyboardShortcut(.space, modifiers: [])
+                    .buttonBorderShape(.circle)
+                    .controlSize(.large)
+                    .limeButton()
                     Text("\(timecode(model.current)) / \(timecode(model.duration))").monospacedDigit().foregroundStyle(.secondary)
                     Spacer()
                 }
@@ -303,9 +306,13 @@ struct VideoEditor: View {
                 SidebarSection("Speed") {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 4), spacing: 6) {
                         ForEach([0.25, 0.5, 0.75, 1.25, 1.5, 2, 3, 4], id: \.self) { s in
-                            Button(speedLabel(s)) { model.speed = s }
-                                .buttonStyle(.bordered)
-                                .tint(model.speed == s ? Color(nsColor: Brand.limeDeep) : nil)
+                            Button { model.speed = s } label: {
+                                Text(speedLabel(s)).font(.callout.weight(.medium))
+                                    .frame(maxWidth: .infinity, minHeight: 28)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .limeChip(selected: model.speed == s, cornerRadius: 8)
                         }
                     }
                     ValueSlider(title: "Custom", value: $model.speed, range: 0.25...4) { speedLabel($0) }
@@ -503,9 +510,12 @@ struct AudioEditor: View {
                 .frame(height: 140)
                 HStack(spacing: 12) {
                     Button(action: model.togglePlay) {
-                        Image(systemName: model.playing ? "pause.fill" : "play.fill").frame(width: 18)
+                        Image(systemName: model.playing ? "pause.fill" : "play.fill").frame(width: 18, height: 18)
                     }
                     .keyboardShortcut(.space, modifiers: [])
+                    .buttonBorderShape(.circle)
+                    .controlSize(.large)
+                    .limeButton()
                     Text("\(timecode(model.current)) / \(timecode(model.duration))").monospacedDigit().foregroundStyle(.secondary)
                     Spacer()
                 }
@@ -715,10 +725,7 @@ struct OrganizerEditor: View {
                             Text("Page \(ref.index + 1)").font(.caption).foregroundStyle(.secondary)
                         }
                         .padding(8)
-                        .background(RoundedRectangle(cornerRadius: 10)
-                            .fill(selected ? Color(nsColor: Brand.lime).opacity(0.3) : Color.clear))
-                        .overlay(RoundedRectangle(cornerRadius: 10)
-                            .strokeBorder(selected ? Color(nsColor: Brand.limeDeep) : .clear, lineWidth: 2))
+                        .limeChip(selected: selected, cornerRadius: 12)
                         .contentShape(Rectangle())
                         .onTapGesture { model.tap(ref.id) }
                         .onDrag {
@@ -733,10 +740,10 @@ struct OrganizerEditor: View {
             .onDeleteCommand { model.deleteSelected() }
         } sidebar: {
             SidebarSection("Selected pages") {
-                HStack {
-                    Button { model.rotate(by: -90) } label: { Image(systemName: "rotate.left") }.help("Rotate left")
-                    Button { model.rotate(by: 90) } label: { Image(systemName: "rotate.right") }.help("Rotate right")
-                    Button(role: .destructive) { model.deleteSelected() } label: { Image(systemName: "trash") }.help("Delete")
+                VStack(alignment: .leading) {
+                    Button { model.rotate(by: -90) } label: { Label("Rotate Left", systemImage: "rotate.left") }
+                    Button { model.rotate(by: 90) } label: { Label("Rotate Right", systemImage: "rotate.right") }
+                    Button(role: .destructive) { model.deleteSelected() } label: { Label("Delete", systemImage: "trash") }
                 }
                 .disabled(model.selection.isEmpty)
                 Button("Select All") { model.selection = Set(model.pages.map(\.id)) }

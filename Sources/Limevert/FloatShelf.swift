@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import QuickLookThumbnailing
 import SwiftUI
 import UniformTypeIdentifiers
@@ -34,6 +35,7 @@ final class FloatModel: ObservableObject {
 final class FloatWindowController: NSObject, NSWindowDelegate {
     let model = FloatModel()
     private let panel: NSPanel
+    private var themeObserver: AnyCancellable?
     var onClose: () -> Void = {}
 
     init(urls: [URL], offset: Int) {
@@ -52,10 +54,22 @@ final class FloatWindowController: NSObject, NSWindowDelegate {
         panel.minSize = NSSize(width: 200, height: 180)
         panel.delegate = self
         panel.contentView = NSHostingView(rootView: FloatView(model: model, close: { [weak self] in self?.close() }))
+        applyTheme()
+        themeObserver = Settings.shared.objectWillChange.sink { [weak self] _ in
+            DispatchQueue.main.async { self?.applyTheme() }
+        }
         if let screen = NSScreen.main?.visibleFrame {
             let shift = CGFloat(offset) * 28
             panel.setFrameOrigin(NSPoint(x: screen.maxX - 280 - shift, y: screen.midY - 150 - shift))
         }
+    }
+
+    /// With glass, the window itself is transparent and the SwiftUI content draws the glass panel.
+    private func applyTheme() {
+        let glass = Theme.glassEnabled
+        panel.isOpaque = !glass
+        panel.backgroundColor = glass ? .clear : .windowBackgroundColor
+        panel.invalidateShadow()
     }
 
     func show() { panel.orderFrontRegardless() }
@@ -129,6 +143,7 @@ struct FloatView: View {
             RoundedRectangle(cornerRadius: 12)
                 .strokeBorder(model.dropTargeted ? Color(nsColor: Brand.lime) : .clear, lineWidth: 3)
         )
+        .modifier(FloatGlass())
         .onDrop(of: [.fileURL], isTargeted: $model.dropTargeted) { providers in
             for provider in providers {
                 _ = provider.loadObject(ofClass: URL.self) { url, _ in
@@ -170,6 +185,25 @@ struct FloatTile: View {
             if let rep = try? await QLThumbnailGenerator.shared.generateBestRepresentation(for: req) {
                 thumb.image = rep.nsImage
             }
+        }
+    }
+}
+
+/// Glass panel for the Float when the design is on. The barely-visible fill keeps the whole
+/// panel a drop target: the window server passes drags through fully transparent pixels.
+struct FloatGlass: ViewModifier {
+    @ObservedObject private var settings = Settings.shared
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if Theme.glassEnabled {
+            let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
+            content
+                .background(Color.black.opacity(0.012), in: shape)
+                .limeSurface(in: shape)
+                .ignoresSafeArea()
+        } else {
+            content
         }
     }
 }

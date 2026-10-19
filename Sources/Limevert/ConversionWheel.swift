@@ -22,10 +22,10 @@ final class ConversionWheelController {
         let size = view.diameter
         let frame = NSRect(x: point.x - size / 2, y: point.y - size / 2, width: size, height: size)
         var content: NSView = view
-        if #available(macOS 26, *) {
+        if #available(macOS 26, *), Theme.glassEnabled {
             // System Liquid Glass renders below; the AppKit view stays on top as the invisible drop target.
             view.drawsWheel = false
-            let glass = PassthroughHostingView(rootView: GlassWheelView(model: view.model, style: Settings.shared.wheelGlass))
+            let glass = PassthroughHostingView(rootView: GlassWheelView(model: view.model, style: Settings.shared.glassStyle))
             let stack = NSView(frame: NSRect(x: 0, y: 0, width: size, height: size))
             for v in [glass, view] as [NSView] {
                 v.frame = stack.bounds

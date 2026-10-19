@@ -70,6 +70,21 @@ struct LimeMark: View {
     }
 }
 
+/// Feature icon tile: clear glass with the lime icon when enabled, a soft lime fill otherwise.
+struct WelcomeTile: ViewModifier {
+    @ObservedObject private var settings = Settings.shared
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+        if Theme.glassEnabled {
+            content.limeSurface(in: shape)
+        } else {
+            content.background(shape.fill(Color(nsColor: Brand.lime).opacity(0.15)))
+        }
+    }
+}
+
 @MainActor
 enum WelcomeWindow {
     private static var window: NSWindow?
@@ -116,7 +131,7 @@ struct WelcomeView: View {
             .padding(.top, 36)
 
             HStack {
-                if state.page > 0 { Button("Back") { withAnimation { state.page -= 1 } }.buttonStyle(.bordered) }
+                if state.page > 0 { Button("Back") { withAnimation { state.page -= 1 } }.limeButton() }
                 Spacer()
                 HStack(spacing: 6) {
                     ForEach(0..<3) { i in
@@ -129,13 +144,13 @@ struct WelcomeView: View {
                     if state.page == 2 { settings.hasSeenWelcome = true; close() } else { withAnimation { state.page += 1 } }
                 }
                 .keyboardShortcut(.defaultAction)
-                .buttonStyle(.borderedProminent)
                 .controlSize(.large)
-                .tint(Color(nsColor: Brand.limeDeep))
+                .limeButton(prominent: true)
             }
             .padding(20)
         }
         .frame(width: 560, height: 470)
+        .background(Theme.glassEnabled ? AnyView(GlassBackdrop().ignoresSafeArea()) : AnyView(Color.clear))
     }
 
     private var intro: some View {
@@ -168,8 +183,7 @@ struct WelcomeView: View {
                 ForEach(settings.shortcut.keys, id: \.self) { key in
                     Text(key).font(.system(.title3, design: .rounded).weight(.semibold))
                         .padding(.horizontal, 14).padding(.vertical, 8)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(Color.secondary.opacity(0.12)))
-                        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.secondary.opacity(0.3)))
+                        .limeSurface(in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
             }
             Picker("Shortcut", selection: $settings.shortcut) {
@@ -198,8 +212,8 @@ struct WelcomeView: View {
     private func feature(_ symbol: String, _ title: String) -> some View {
         VStack(spacing: 6) {
             Image(systemName: symbol).font(.title2).foregroundStyle(Color(nsColor: Brand.limeDeep))
-                .frame(width: 48, height: 40)
-                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color(nsColor: Brand.lime).opacity(0.15)))
+                .frame(width: 52, height: 44)
+                .modifier(WelcomeTile())
             Text(title).font(.caption)
         }
     }

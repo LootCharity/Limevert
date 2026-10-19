@@ -221,8 +221,8 @@ struct HUDView: View {
         }
         .padding(14)
         .frame(width: 300, alignment: .leading)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.primary.opacity(0.08)))
+        .limeSurface(in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .padding(6)   // room for the glass edge and shadow inside the panel
     }
 }
 
@@ -238,6 +238,7 @@ enum QRResultsWindow {
         w.title = "QR Codes"
         w.contentViewController = NSHostingController(rootView: view)
         w.isReleasedWhenClosed = false
+        WindowTheme.adopt(w)
         w.setContentSize(NSSize(width: 440, height: min(120 + 64 * codes.count, 520)))
         w.center()
         window = w
@@ -250,23 +251,45 @@ struct QRCode: Identifiable { let id = UUID(); let file: String; let payload: St
 
 struct QRResultsView: View {
     let codes: [QRCode]
+    @ObservedObject private var settings = Settings.shared
+
     var body: some View {
-        List(codes) { code in
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(code.payload).textSelection(.enabled).lineLimit(3)
-                    Text(code.file).font(.caption).foregroundStyle(.secondary)
-                }
-                Spacer()
-                if let url = URL(string: code.payload), url.scheme?.hasPrefix("http") == true {
-                    Button("Open") { NSWorkspace.shared.open(url) }
-                }
-                Button("Copy") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(code.payload, forType: .string)
+        ScrollView {
+            VStack(spacing: 10) {
+                ForEach(codes) { code in
+                    HStack(spacing: 10) {
+                        Image(systemName: "qrcode").font(.title2).foregroundStyle(Theme.limeDeep)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(code.payload).textSelection(.enabled).lineLimit(3)
+                            Text(code.file).font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        if let url = URL(string: code.payload), url.scheme?.hasPrefix("http") == true {
+                            Button("Open") { NSWorkspace.shared.open(url) }.limeButton()
+                        }
+                        Button("Copy") {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(code.payload, forType: .string)
+                        }
+                        .limeButton(prominent: true)
+                    }
+                    .padding(12)
+                    .limeSurface(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
             }
-            .padding(.vertical, 4)
+            .padding(16)
+        }
+        .background(Theme.glassEnabled ? AnyView(GlassBackdrop().ignoresSafeArea()) : AnyView(Color.clear))
+    }
+}
+
+/// Soft lime-tinted window background that gives glass panels something to pick up.
+struct GlassBackdrop: View {
+    var body: some View {
+        ZStack {
+            Color(nsColor: .windowBackgroundColor)
+            RadialGradient(colors: [Theme.lime.opacity(0.18), .clear], center: .topLeading, startRadius: 0, endRadius: 600)
+            RadialGradient(colors: [Theme.limeDeep.opacity(0.12), .clear], center: .bottomTrailing, startRadius: 0, endRadius: 500)
         }
     }
 }

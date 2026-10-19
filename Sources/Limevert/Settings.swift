@@ -43,7 +43,9 @@ final class Settings: ObservableObject {
     /// 0 = 1080p HEVC, 1 = 720p, 2 = 540p.
     @Published var videoCompression: Int { didSet { d.set(videoCompression, forKey: "videoCompression") } }
     @Published var hasSeenWelcome: Bool { didSet { d.set(hasSeenWelcome, forKey: "hasSeenWelcome") } }
-    @Published var wheelGlass: WheelGlass { didSet { d.set(wheelGlass.rawValue, forKey: "wheelGlass") } }
+    @Published var glassStyle: GlassStyle { didSet { d.set(glassStyle.rawValue, forKey: "wheelGlass") } }
+    /// Liquid Glass design for the wheel, editors and windows (macOS 26 and later).
+    @Published var liquidGlass: Bool { didSet { d.set(liquidGlass, forKey: "liquidGlass") } }
 
     static let maxEdgeChoices: [Int?] = [nil, 3840, 2560, 1920, 1280]
     var compressMaxEdge: Int? { Self.maxEdgeChoices[min(compressMaxEdgeIndex, Self.maxEdgeChoices.count - 1)] }
@@ -53,6 +55,7 @@ final class Settings: ObservableObject {
             "shortcut": DragShortcut.option.rawValue, "soundFeedback": true, "revealOutputs": false,
             "terminalApp": "Terminal", "imageQuality": 0.9, "compressionQuality": 0.6,
             "compressMaxEdgeIndex": 0, "keepFormat": false, "videoCompression": 1, "hasSeenWelcome": false,
+            "liquidGlass": true,
         ])
         shortcut = DragShortcut(rawValue: d.string(forKey: "shortcut") ?? "") ?? .option
         soundFeedback = d.bool(forKey: "soundFeedback")
@@ -64,7 +67,8 @@ final class Settings: ObservableObject {
         keepFormatWhenCompressing = d.bool(forKey: "keepFormat")
         videoCompression = d.integer(forKey: "videoCompression")
         hasSeenWelcome = d.bool(forKey: "hasSeenWelcome")
-        wheelGlass = WheelGlass(rawValue: d.string(forKey: "wheelGlass") ?? "") ?? .regular
+        glassStyle = GlassStyle(rawValue: d.string(forKey: "wheelGlass") ?? "") ?? .regular
+        liquidGlass = d.bool(forKey: "liquidGlass")
     }
 
     var launchAtLogin: Bool {
@@ -92,11 +96,21 @@ struct SettingsView: View {
                     }
                     Text("Drag files anywhere, then tap the shortcut to open the conversion wheel.")
                         .font(.caption).foregroundStyle(.secondary)
-                    if #available(macOS 26, *) {
-                        Picker("Wheel glass", selection: $settings.wheelGlass) {
-                            ForEach(WheelGlass.allCases) { Text($0.label).tag($0) }
+                }
+                Section("Appearance") {
+                    if Theme.glassSupported {
+                        Toggle("Liquid Glass design", isOn: $settings.liquidGlass)
+                        if settings.liquidGlass {
+                            Picker("Glass style", selection: $settings.glassStyle) {
+                                ForEach(GlassStyle.allCases) { Text($0.label).tag($0) }
+                            }
+                            .pickerStyle(.segmented)
                         }
-                        .pickerStyle(.segmented)
+                        Text("Applies to the wheel, the editors and Limevert's windows. Turn it off for the classic look.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    } else {
+                        Text("Liquid Glass needs macOS 26 or later. Limevert uses the classic look on this Mac.")
+                            .font(.caption).foregroundStyle(.secondary)
                     }
                 }
                 Section("General") {
@@ -214,6 +228,7 @@ final class SettingsWindowController {
             w.title = "Limevert Settings"
             w.styleMask = [.titled, .closable]
             w.isReleasedWhenClosed = false
+            WindowTheme.adopt(w)
             w.center()
             window = w
         }

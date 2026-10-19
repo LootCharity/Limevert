@@ -50,6 +50,7 @@ enum Editors {
         w.isReleasedWhenClosed = false
         w.minSize = NSSize(width: 680, height: 460)
         w.contentView = NSHostingView(rootView: make { [weak w] in w?.close() })
+        WindowTheme.adopt(w)
         w.center()
         windows.append(w)
         NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: w, queue: .main) { note in
@@ -81,7 +82,62 @@ struct EditorScaffold<Canvas: View, Sidebar: View>: View {
         self.sidebar = sidebar()
     }
 
+    @ObservedObject private var settings = Settings.shared
+
     var body: some View {
+        if Theme.glassEnabled { glassLayout } else { classicLayout }
+    }
+
+    // Floating glass panels: the backdrop fills the window, the canvas keeps clear of the panels
+    // so handles and timelines are never underneath glass.
+    private let margin: CGFloat = 14
+    private let sidebarWidth: CGFloat = 268
+    private let barHeight: CGFloat = 52
+
+    private var glassLayout: some View {
+        canvas
+            .padding(.trailing, sidebarWidth + margin)
+            .padding(.bottom, barHeight + margin)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(backdrop.ignoresSafeArea())
+            .overlay(alignment: .topTrailing) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) { sidebar }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(18)
+                }
+                .scrollIndicators(.never)
+                .frame(width: sidebarWidth)
+                .limeSurface(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .padding([.top, .trailing], margin)
+                .padding(.bottom, barHeight + 2 * margin)
+            }
+            .overlay(alignment: .bottom) {
+                // Separate glass pieces floating over the canvas: no glass stacked on glass.
+                HStack(spacing: 10) {
+                    if !status.isEmpty {
+                        Text(status).font(.callout).foregroundStyle(.secondary).lineLimit(1).monospacedDigit()
+                            .padding(.horizontal, 16)
+                            .frame(height: 34)
+                            .limeSurface(in: Capsule())
+                    }
+                    Spacer()
+                    Button("Cancel", action: cancel).keyboardShortcut(.cancelAction).controlSize(.large).limeButton()
+                    Button(primary, action: save)
+                        .keyboardShortcut(.defaultAction)
+                        .controlSize(.large)
+                        .limeButton(prominent: true)
+                        .disabled(!canSave)
+                }
+                .frame(height: barHeight)
+                .padding(.horizontal, margin + 4)
+                .padding(.bottom, margin)
+            }
+    }
+
+    private var backdrop: some View { GlassBackdrop() }
+
+    private var classicLayout: some View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
                 canvas
@@ -527,8 +583,8 @@ struct AnnotateEditor: View {
                                 Text(kind.label).font(.caption2)
                             }
                             .frame(maxWidth: .infinity, minHeight: 44)
-                            .background(RoundedRectangle(cornerRadius: 8)
-                                .fill(model.tool == kind ? Color(nsColor: Brand.lime).opacity(0.35) : Color.secondary.opacity(0.1)))
+                            .contentShape(Rectangle())
+                            .limeChip(selected: model.tool == kind)
                         }
                         .buttonStyle(.plain)
                     }
